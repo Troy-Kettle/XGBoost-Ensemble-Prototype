@@ -2,11 +2,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, classification_report
 from sklearn.impute import SimpleImputer
 
 # Load the dataset
@@ -36,39 +36,48 @@ scaler = MinMaxScaler()
 X_scaled = scaler.fit_transform(X)
 
 # Split the data into training and testing sets
-X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=42)
+X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=42, stratify=Y)
 
-# Train a Random Forest model
-rf = RandomForestClassifier(n_estimators=100, random_state=42)
-rf.fit(X_train, Y_train)
+# Define models
+rf = RandomForestClassifier(random_state=42)
+mlp = MLPClassifier(max_iter=1000, random_state=42)
 
-# Predict on the test set using the trained Random Forest model
-rf_predicted_probs = rf.predict_proba(X_test)[:, 1]
+# Grid search for hyperparameter tuning
+rf_params = {
+    'n_estimators': [100, 200],
+    'max_depth': [None, 10, 20],
+    'min_samples_split': [2, 5]
+}
+mlp_params = {
+    'hidden_layer_sizes': [(10,), (20,), (10, 10)],
+    'alpha': [0.0001, 0.001]
+}
 
-# Define a simple MLP classifier for the adaptive fuzzy-like decision making
-mlp = MLPClassifier(hidden_layer_sizes=(10,), max_iter=1000, random_state=42)
-mlp.fit(X_train, Y_train)
+# Use GridSearchCV for RandomForest and MLP
+grid_rf = GridSearchCV(estimator=rf, param_grid=rf_params, cv=5, scoring='accuracy')
+grid_mlp = GridSearchCV(estimator=mlp, param_grid=mlp_params, cv=5, scoring='accuracy')
 
-# Predict on the test set using the MLP classifier
-mlp_predicted_probs = mlp.predict_proba(X_test)[:, 1]
+grid_rf.fit(X_train, Y_train)
+grid_mlp.fit(X_train, Y_train)
 
-# Combine Random Forest and MLP predictions
-fuzzy_predictions = []
-for i in range(len(X_test)):
-    rf_score = rf_predicted_probs[i]
-    mlp_score = mlp_predicted_probs[i]
-    combined_prediction = (rf_score + mlp_score) / 2  # Simple average of RF and MLP output
-    fuzzy_predictions.append(combined_prediction)
+# Best models
+best_rf = grid_rf.best_estimator_
+best_mlp = grid_mlp.best_estimator_
 
-# Convert combined predictions to binary labels (0 or 1)
-predicted_labels_binary = np.array(fuzzy_predictions) >= 0.5
+# Train a Voting Classifier with the best models
+voting_clf = VotingClassifier(estimators=[('rf', best_rf), ('mlp', best_mlp)], voting='soft')
+voting_clf.fit(X_train, Y_train)
+
+# Predict on the test set using the Voting Classifier
+voting_predicted_probs = voting_clf.predict_proba(X_test)[:, 1]
+predicted_labels_binary = voting_predicted_probs >= 0.5
 
 # Calculate accuracy
 accuracy = accuracy_score(Y_test, predicted_labels_binary)
 print(f"Accuracy: {accuracy * 100:.2f}%")
 
 # Feature Importance Plot for Random Forest
-importances = rf.feature_importances_
+importances = best_rf.feature_importances_
 indices = np.argsort(importances)[::-1]
 
 plt.figure(figsize=(10, 6))
@@ -79,28 +88,12 @@ plt.xlim([-1, len(features)])
 plt.tight_layout()
 plt.show()
 
-# ROC Curve for Random Forest
-fpr_rf, tpr_rf, _ = roc_curve(Y_test, rf_predicted_probs)
-roc_auc_rf = roc_auc_score(Y_test, rf_predicted_probs)
+# ROC Curve for Voting Classifier
+fpr, tpr, _ = roc_curve(Y_test, voting_predicted_probs)
+roc_auc = roc_auc_score(Y_test, voting_predicted_probs)
 
 plt.figure(figsize=(10, 6))
-plt.plot(fpr_rf, tpr_rf, color='blue', lw=2, label=f'Random Forest (AUC = {roc_auc_rf:.2f})')
-plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver Operating Characteristic (ROC)')
-plt.legend(loc='lower right')
-plt.grid()
-plt.show()
-
-# ROC Curve for MLP
-fpr_mlp, tpr_mlp, _ = roc_curve(Y_test, mlp_predicted_probs)
-roc_auc_mlp = roc_auc_score(Y_test, mlp_predicted_probs)
-
-plt.figure(figsize=(10, 6))
-plt.plot(fpr_mlp, tpr_mlp, color='green', lw=2, label=f'MLP (AUC = {roc_auc_mlp:.2f})')
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'Voting Classifier (AUC = {roc_auc:.2f})')
 plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--')
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
@@ -120,9 +113,13 @@ disp.plot(cmap=plt.cm.Blues)
 plt.title('Confusion Matrix')
 plt.show()
 
+# Classification Report
+print("Classification Report:")
+print(classification_report(Y_test, predicted_labels_binary))
+
 # Distribution of Predicted Risk Scores
 plt.figure(figsize=(10, 6))
-plt.hist(fuzzy_predictions, bins=30, color='skyblue', edgecolor='black')
+plt.hist(voting_predicted_probs, bins=30, color='skyblue', edgecolor='black')
 plt.xlabel('Risk Score')
 plt.ylabel('Frequency')
 plt.title('Distribution of Predicted Risk Scores')
@@ -149,20 +146,13 @@ def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
     # Normalize the input features
     new_data_scaled = scaler.transform(new_data_imputed)
     
-    # Predict using Random Forest
-    rf_score = rf.predict_proba(new_data_scaled)[0, 1]
-    
-    # Predict using MLP
-    mlp_score = mlp.predict_proba(new_data_scaled)[0, 1]
-    
-    # Combine the scores
-    combined_prediction = (rf_score + mlp_score) / 2  # Simple average of RF and MLP output
+    # Predict using the Voting Classifier
+    combined_prediction = voting_clf.predict_proba(new_data_scaled)[0, 1]
     
     # Return the risk score
     return combined_prediction
 
 # Example usage
-# Replace these with actual values for heart_rate, systolic_bp, resp_rate, o2_sats, and temperature
 heart_rate = 98
 systolic_bp = 123
 resp_rate = 19
