@@ -1,27 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox
-import pandas as pd
-import numpy as np
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.neural_network import MLPClassifier
-
-# Define your features here (should match what you used when training the model)
-features = ['HEART_RATE', 'SYSTOLIC_BP', 'RESP_RATE', 'O2_SATS', 'TEMPERATURE']
-
-# Load or define your trained model, imputer, and scaler here
-# Assume these are the same as in your original code
-# Example dummy initializations for illustration purposes
-imputer = SimpleImputer(strategy='mean')
-scaler = MinMaxScaler()
-voting_clf = VotingClassifier(estimators=[
-    ('rf', RandomForestClassifier()), 
-    ('mlp', MLPClassifier(max_iter=1000))
-], voting='soft')
-
-# Make sure the imputer and scaler are fitted on the training data as you did earlier
-# This code assumes you've already fitted these on your training data
 
 # Function to predict risk for a new set of feature values
 def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
@@ -34,6 +12,9 @@ def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
         'TEMPERATURE': [temperature]
     })
 
+    # Ensure the new data has the same columns as the training data
+    new_data = new_data[features]
+    
     # Impute missing values in the input (if any)
     new_data_imputed = imputer.transform(new_data)
     
