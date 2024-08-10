@@ -1,4 +1,4 @@
-# ANFIS-Diagnosis-System
+# RFC-Fuzzy-Prototype
 
 # Medical Event Risk Prediction
 
