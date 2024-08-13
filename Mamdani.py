@@ -1,99 +1,100 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
 from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, classification_report
 from sklearn.impute import SimpleImputer
+from xgboost import XGBClassifier
+import joblib
+from imblearn.over_sampling import SMOTE
 
 # Load the dataset
+print("Loading dataset...")
 df = pd.read_excel('ANFIS.xlsx')
-
-# Display the first few rows to check the format
-print(df.head())
+print("Dataset loaded. Shape:", df.shape)
+print("First few rows:\n", df.head())
 
 # Check for missing values
-print(df.isnull().sum())
+print("\nChecking for missing values...")
+missing_values = df.isnull().sum()
+print("Missing values per column:\n", missing_values)
 
-# Handle missing values using SimpleImputer
+# Define features and target
 features = ['HEART_RATE', 'SYSTOLIC_BP', 'RESP_RATE', 'O2_SATS', 'TEMPERATURE']
 target = '4_HOURS_FROM_ANNOTATED_EVENT'
 
-# Ensure that only relevant features are used
-df_imputed = df[features + [target]].copy()
+# Handle missing values using SimpleImputer
+print("\nHandling missing values...")
 imputer = SimpleImputer(strategy='mean')
-df_imputed[features] = imputer.fit_transform(df_imputed[features])
+df[features] = imputer.fit_transform(df[features])
+print("Missing values after imputation:\n", df[features].isnull().sum())
 
-# Separate features and labels
-X = df_imputed[features].values
-Y = df_imputed[target].values
+# Separate features and target
+X = df[features].values
+y = df[target].values
 
 # Normalize the data
+print("\nNormalizing data...")
 scaler = MinMaxScaler()
 X_scaled = scaler.fit_transform(X)
 
+# Add polynomial features
+print("\nAdding polynomial features...")
+poly = PolynomialFeatures(degree=2, include_bias=False)
+X_poly = poly.fit_transform(X_scaled)
+print(f"Polynomial features added. New shape: {X_poly.shape}")
+
 # Split the data into training and testing sets
-X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=42, stratify=Y)
+print("\nSplitting data into training and testing sets...")
+X_train, X_test, y_train, y_test = train_test_split(X_poly, y, test_size=0.2, random_state=42, stratify=y)
+print("Data split. Training set size:", X_train.shape, "Testing set size:", X_test.shape)
 
-# Define models
-rf = RandomForestClassifier(random_state=42)
-mlp = MLPClassifier(max_iter=1000, random_state=42)
+# Handle class imbalance using SMOTE
+print("\nApplying SMOTE...")
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+print(f"Resampled training set size: {X_train_resampled.shape}")
 
-# Grid search for hyperparameter tuning
-rf_params = {
-    'n_estimators': [100, 200],
-    'max_depth': [None, 10, 20],
-    'min_samples_split': [2, 5]
+# Define XGBoost model
+xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+
+# Define hyperparameter grid for XGBoost
+xgb_params = {
+    'n_estimators': [100, 200, 300],
+    'max_depth': [3, 6, 10],
+    'learning_rate': [0.01, 0.1, 0.2]
 }
-mlp_params = {
-    'hidden_layer_sizes': [(10,), (20,), (10, 10)],
-    'alpha': [0.0001, 0.001]
-}
 
-# Use GridSearchCV for RandomForest and MLP
-grid_rf = GridSearchCV(estimator=rf, param_grid=rf_params, cv=5, scoring='accuracy')
-grid_mlp = GridSearchCV(estimator=mlp, param_grid=mlp_params, cv=5, scoring='accuracy')
+# Perform Grid Search for hyperparameter tuning
+print("\nPerforming Grid Search for XGBClassifier...")
+grid_xgb = GridSearchCV(xgb, xgb_params, cv=5, scoring='accuracy')
+grid_xgb.fit(X_train_resampled, y_train_resampled)
+print("Best XGBoost parameters:", grid_xgb.best_params_)
 
-grid_rf.fit(X_train, Y_train)
-grid_mlp.fit(X_train, Y_train)
+# Best model
+best_xgb = grid_xgb.best_estimator_
 
-# Best models
-best_rf = grid_rf.best_estimator_
-best_mlp = grid_mlp.best_estimator_
+# Train the best XGBoost model
+print("\nTraining XGBoost Classifier...")
+best_xgb.fit(X_train_resampled, y_train_resampled)
+print("XGBoost Classifier trained.")
 
-# Train a Voting Classifier with the best models
-voting_clf = VotingClassifier(estimators=[('rf', best_rf), ('mlp', best_mlp)], voting='soft')
-voting_clf.fit(X_train, Y_train)
-
-# Predict on the test set using the Voting Classifier
-voting_predicted_probs = voting_clf.predict_proba(X_test)[:, 1]
-predicted_labels_binary = voting_predicted_probs >= 0.5
+# Predict on the test set using the XGBoost model
+print("\nMaking predictions...")
+y_pred_proba = best_xgb.predict_proba(X_test)[:, 1]
+y_pred_binary = (y_pred_proba >= 0.5).astype(int)
 
 # Calculate accuracy
-accuracy = accuracy_score(Y_test, predicted_labels_binary)
+accuracy = accuracy_score(y_test, y_pred_binary)
 print(f"Accuracy: {accuracy * 100:.2f}%")
 
-# Feature Importance Plot for Random Forest
-importances = best_rf.feature_importances_
-indices = np.argsort(importances)[::-1]
+# ROC Curve for XGBoost Classifier
+fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+roc_auc = roc_auc_score(y_test, y_pred_proba)
 
 plt.figure(figsize=(10, 6))
-plt.title("Feature Importance (Random Forest)")
-plt.bar(range(len(features)), importances[indices], align="center")
-plt.xticks(range(len(features)), np.array(features)[indices], rotation=90)
-plt.xlim([-1, len(features)])
-plt.tight_layout()
-plt.show()
-
-# ROC Curve for Voting Classifier
-fpr, tpr, _ = roc_curve(Y_test, voting_predicted_probs)
-roc_auc = roc_auc_score(Y_test, voting_predicted_probs)
-
-plt.figure(figsize=(10, 6))
-plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'Voting Classifier (AUC = {roc_auc:.2f})')
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'XGBoost Classifier (AUC = {roc_auc:.2f})')
 plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--')
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
@@ -105,7 +106,7 @@ plt.grid()
 plt.show()
 
 # Confusion Matrix
-conf_matrix = confusion_matrix(Y_test, predicted_labels_binary)
+conf_matrix = confusion_matrix(y_test, y_pred_binary)
 disp = ConfusionMatrixDisplay(conf_matrix, display_labels=['Class 0', 'Class 1'])
 
 plt.figure(figsize=(8, 6))
@@ -114,12 +115,12 @@ plt.title('Confusion Matrix')
 plt.show()
 
 # Classification Report
-print("Classification Report:")
-print(classification_report(Y_test, predicted_labels_binary))
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred_binary))
 
 # Distribution of Predicted Risk Scores
 plt.figure(figsize=(10, 6))
-plt.hist(voting_predicted_probs, bins=30, color='skyblue', edgecolor='black')
+plt.hist(y_pred_proba, bins=30, color='skyblue', edgecolor='black')
 plt.xlabel('Risk Score')
 plt.ylabel('Frequency')
 plt.title('Distribution of Predicted Risk Scores')
@@ -128,7 +129,7 @@ plt.show()
 
 # Function to predict risk for a new set of feature values
 def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
-    # Create a DataFrame for the new input with the same feature names as the original data
+    print("\nPredicting risk for new data...")
     new_data = pd.DataFrame({
         'HEART_RATE': [heart_rate],
         'SYSTOLIC_BP': [systolic_bp],
@@ -137,20 +138,12 @@ def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
         'TEMPERATURE': [temperature]
     })
 
-    # Ensure the new data has the same columns as the training data
-    new_data = new_data[features]
-    
-    # Impute missing values in the input (if any)
     new_data_imputed = imputer.transform(new_data)
-    
-    # Normalize the input features
     new_data_scaled = scaler.transform(new_data_imputed)
-    
-    # Predict using the Voting Classifier
-    combined_prediction = voting_clf.predict_proba(new_data_scaled)[0, 1]
-    
-    # Return the risk score
-    return combined_prediction
+    new_data_poly = poly.transform(new_data_scaled)
+    risk_score = best_xgb.predict_proba(new_data_poly)[0, 1]
+    print(f"Predicted Risk Score: {risk_score:.2f}")
+    return risk_score
 
 # Example usage
 heart_rate = 98
@@ -161,3 +154,12 @@ temperature = 36.6
 
 risk_score = predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature)
 print(f"Predicted Risk Score: {risk_score:.2f}")
+
+# Save the model
+print("\nSaving the model...")
+joblib.dump(best_xgb, 'xgboost_classifier_model.pkl')
+print("Model saved as 'xgboost_classifier_model.pkl'")
+
+# Load the model (for future use)
+# loaded_model = joblib.load('xgboost_classifier_model.pkl')
+# print("Model loaded successfully.")
