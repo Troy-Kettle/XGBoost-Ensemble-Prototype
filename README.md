@@ -1,100 +1,87 @@
-# RFC-Fuzzy-Prototype
+# XGBoost Classifier with Advanced Feature Engineering and Hyperparameter Optimization
+## Overview
+This project involves building a classification model to predict outcomes based on various medical features. The model employs several techniques, including feature engineering, imputation, normalization, and advanced hyperparameter optimization using Bayesian Optimization. The final model is an XGBoost classifier trained with the best hyperparameters found through optimization.
 
-# Medical Event Risk Prediction
+## Project Structure
+### Data Loading and Preprocessing
+- Load the dataset from an Excel file.
+- Handle missing values using SimpleImputer.
+- Perform feature engineering with PolynomialFeatures.
+- Normalize the features using MinMaxScaler.
+- Address class imbalance using ADASYN.
 
-This project combines Machine Learning and Fuzzy Logic to predict the risk of a medical event occurring within 4 hours based on patient physiological measurements. It uses a Random Forest classifier to predict the probability of an event, which is then refined using fuzzy logic rules.
+### Feature Selection
+- Select the most relevant features using RFECV with an XGBoost classifier.
 
-## Features
+### Model Building and Evaluation
+- Train a stacking classifier combining XGBoost, LightGBM, and CatBoost.
+- Optimize XGBoost hyperparameters using Bayesian Optimization.
+- Evaluate the final model using cross-validation and ROC AUC score.
+- Compute SHAP values for model explainability.
 
-- **HEART_RATE**: The heart rate of the patient.
-- **SYSTOLIC_BP**: The systolic blood pressure of the patient.
-- **RESP_RATE**: The respiratory rate of the patient.
-- **O2_SATS**: The oxygen saturation level of the patient.
-- **TEMPERATURE**: The body temperature of the patient.
+### Saving Components
+- Save preprocessing components and the final model using joblib.
 
-## Categories of Risk
+## Requirements
+Ensure you have the following Python packages installed:
+- pandas
+- numpy
+- matplotlib
+- scikit-learn
+- xgboost
+- lightgbm
+- catboost
+- imblearn
+- bayesian-optimization
+- shap
+- joblib
+- openpyxl (for reading Excel files)
 
-The predicted risk of an event is categorized into five levels:
-
-- **Very Low**
-- **Low**
-- **Medium**
-- **High**
-- **Very High**
-
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/medical-event-risk-prediction.git
-   cd medical-event-risk-prediction
-   ```
-
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Usage
-
-1. Ensure your dataset is named `ANFIS.xlsx` and placed in the project directory. The dataset should have the following columns:
-   - `HEART_RATE`
-   - `SYSTOLIC_BP`
-   - `RESP_RATE`
-   - `O2_SATS`
-   - `TEMPERATURE`
-   - `4_HOURS_FROM_ANNOTATED_EVENT` (the label column indicating whether an event occurs within 4 hours)
-
-2. Run the prediction script:
-   ```bash
-   python predict_risk.py
-   ```
-
-3. Enter the required physiological measurements when prompted:
-   ```
-   Enter HEART_RATE: 
-   Enter SYSTOLIC_BP: 
-   Enter RESP_RATE: 
-   Enter O2_SATS: 
-   Enter TEMPERATURE: 
-   ```
-
-4. View the predicted probability and risk category:
-   ```
-   Predicted probability of event: xx.xx%
-   Risk Category: [Very Low | Low | Medium | High | Very High]
-   ```
-
-## Example
-
-```
-$ python predict_risk.py
-Enter HEART_RATE: 72
-Enter SYSTOLIC_BP: 120
-Enter RESP_RATE: 16
-Enter O2_SATS: 98
-Enter TEMPERATURE: 37.0
-Predicted probability of event: 23.45%
-Risk Category: Low
-```
-
-## Dependencies
-
-- `pandas`
-- `numpy`
-- `scikit-fuzzy`
-- `scikit-learn`
-- `openpyxl`
-
-You can install these dependencies using:
+You can install the required packages using pip:
 ```bash
-pip install pandas numpy scikit-fuzzy scikit-learn openpyxl
+pip install pandas numpy matplotlib scikit-learn xgboost lightgbm catboost imbalanced-learn bayesian-optimization shap joblib openpyxl
 ```
 
-## Contributing
+## Data
+The dataset is expected to be in Excel format (ANFIS.xlsx) with the following columns:
+- Features: HEART_RATE, SYSTOLIC_BP, RESP_RATE, O2_SATS, TEMPERATURE
+- Target: 4_HOURS_FROM_ANNOTATED_EVENT
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Running the Script
+To run the script, execute it in a Python environment:
+```bash
+python your_script_name.py
+```
+Replace `your_script_name.py` with the name of the script file.
+
+## Output
+### Preprocessing Components:
+- simple_imputer.pkl: Imputer for handling missing values.
+- minmax_scaler.pkl: Scaler for normalizing features.
+- polynomial_features.pkl: Polynomial feature transformer.
+- rfe_selector.pkl: RFECV feature selector.
+
+### Model:
+- best_xgboost_classifier_model.pkl: The trained XGBoost classifier with optimized hyperparameters.
+
+### SHAP Summary Plot:
+SHAP summary plot will be displayed, showing feature importance and the impact of each feature on model predictions.
+
+## Bayesian Optimization
+Hyperparameters optimized for XGBoost include:
+- max_depth
+- learning_rate
+- n_estimators
+- gamma
+- min_child_weight
+- subsample
+- colsample_bytree
 
 ## License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-This project is licensed under the MIT License.
+## Acknowledgments
+- XGBoost, LightGBM, and CatBoost for their powerful implementations of gradient boosting.
+- SHAP for model explainability.
+- imblearn for addressing class imbalance.
+- bayesian-optimization for efficient hyperparameter tuning
