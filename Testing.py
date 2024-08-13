@@ -49,9 +49,9 @@ def predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature):
 # Example usage
 if __name__ == "__main__":
     heart_rate = 100
-    systolic_bp = 110
-    resp_rate = 25
-    o2_sats = 98
+    systolic_bp = 120
+    resp_rate = 19
+    o2_sats = 90
     temperature = 37.6
 
     risk_score = predict_risk(heart_rate, systolic_bp, resp_rate, o2_sats, temperature)
